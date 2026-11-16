@@ -3,7 +3,7 @@
 // No sign-in, no server. The only network access is "Analyse with Gemini"
 // (src/briefs/gemini.js), with the viewer's own key.
 
-import { setLocale, tr, tl } from './i18n/i18n.js';
+import { setLocale, tr, tl, DEFAULT_LOCALE } from './i18n/i18n.js';
 import { openStorage, createStateStore } from './storage/local-state.js';
 import { view, scenario, isExcel } from './ui/view-state.js';
 import { h, t } from './ui/dom.js';
@@ -44,7 +44,7 @@ function boot() {
   view.persistent = persistent;
   view.storageReason = reason;
   const prefs = view.store.prefs();
-  setLocale(prefs.locale || 'zh-CN');
+  setLocale(prefs.locale || DEFAULT_LOCALE);
   // Your own Excel, if one was opened here before (kept in this browser).
   try { restoreWorkbook(); } catch (e) { console.error(e); }
   view.day = 'day1';

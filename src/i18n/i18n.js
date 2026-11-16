@@ -5,10 +5,10 @@
 
 import ZH from './zh.js';
 
-export const DEFAULT_LOCALE = 'zh-CN';
+export const DEFAULT_LOCALE = 'en';
 let locale = DEFAULT_LOCALE;
 
-// 'zh…' → Chinese; 'en…' and 'ms' → English; anything else → the default (Chinese).
+// 'zh…' → Chinese; 'en…' and 'ms' → English; anything else → the default (English).
 export function normaliseLocale(value) {
   const v = String(value || '').trim().toLowerCase();
   if (v.startsWith('zh')) return 'zh-CN';

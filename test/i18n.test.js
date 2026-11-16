@@ -1,4 +1,4 @@
-// Chinese is the default interface language and English stays selectable. These tests
+// English is the default interface language and Chinese stays selectable. These tests
 // keep every interface string translated (a missing key would silently show English)
 // and check that generated task text follows the chosen language.
 import test from 'node:test';
@@ -48,8 +48,9 @@ test('task-rule names, statuses and record types shown on screen are translated'
   assert.deepEqual(needed.filter(k => !(k in ZH)), []);
 });
 
-test('language setting: Chinese by default, English on request', () => {
-  assert.equal(normaliseLocale(''), 'zh-CN');
+test('language setting: English by default, Chinese on request', () => {
+  assert.equal(normaliseLocale(''), 'en');
+  assert.equal(normaliseLocale('fr'), 'en');
   assert.equal(normaliseLocale('zh-CN'), 'zh-CN');
   assert.equal(normaliseLocale('en'), 'en');
   setLocale('zh-CN');
