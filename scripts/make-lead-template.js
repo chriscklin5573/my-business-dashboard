@@ -51,8 +51,10 @@ const LEAD_COLUMNS = [
   ['consultant', 'Who handles the case (usually Chris)', 'Chris'],
   ['phone', 'Phone (HOT leads only)', '012-000 0001'],
   ['problem', 'Short description of the problem', 'Credit card debt'],
-  ['next_action', 'What to do next (active leads only)', 'First call'],
-  ['next_action_date', 'Date of the next action', '2026-11-16'],
+  ['next_action', 'What to do next (leads not yet closed; leave blank once Won)', 'First call'],
+  ['next_action_date', 'Date of the next action (leads not yet closed)', '2026-11-16'],
+  ['last_action', 'Closed customers (Won): what you last did for them', 'Called bank about BCS'],
+  ['last_action_date', 'Closed customers (Won): when you last did it; the dashboard shows how long ago. Optional: case, payment and after-sales dates count too', '2026-11-16'],
   ['lost_reason', 'Why the lead was lost (lost leads only)', 'No reply'],
   ['notes', 'Notes', ''],
   ...HOT_STAGES.map(([id, label], i) => [id, `HOT step ${i + 1} "${label}": the date it was reached (leave blank until then)`, '']),
@@ -94,6 +96,8 @@ const int = (lo, hi) => lo + Math.floor(rnd() * (hi - lo + 1));
 const addDays = (iso, n) => { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 const before = (a, b) => a <= b;
 // a next-action date near the reporting date (a few already overdue), never before the last step
+// a last-action date in the few weeks before the reporting date, never before `since`
+const lastDate = since => { const d = addDays(REPORTING_DATE, -int(0, 20)); return d < since ? since : d; };
 const nextDate = last => { const d = addDays(REPORTING_DATE, int(-4, 10)); return d < last ? addDays(last, 1) : d; };
 
 const NAMES = ['Ali', 'Mei Ling', 'Kumar', 'Siti', 'Jason', 'Farah', 'Wei Jie', 'Priya', 'Hafiz', 'Grace', 'Ahmad', 'Xin Yi', 'Ravi', 'Nurul', 'Daniel', 'Hui Min', 'Arif', 'Kavitha', 'Ken', 'Aisyah', 'Ming', 'Zul', 'Joanne', 'Suresh', 'Amirah', 'Kok Leong', 'Lina', 'Hakim', 'Shu Fen', 'Vincent', 'Yasmin', 'Raj', 'Eunice', 'Faiz', 'Pei Shan', 'Azlan', 'Rachel', 'Ganesh', 'Liyana', 'Chee Keong'];
@@ -213,9 +217,9 @@ for (let i = 0; i < 40; i++) {
         const coi = addDays(lastFee, int(1, 8)); const tg = addDays(lastFee, int(0, 5));
         if (before(coi, REPORTING_DATE) && rnd() < 0.55) row.coi_date = coi;
         if (before(tg, REPORTING_DATE) && rnd() < 0.7) row.telegram_promoted_date = tg;
-        const todo = [!row.coi_date && 'convert to COI', !row.telegram_promoted_date && 'promote Telegram group'].filter(Boolean);
-        if (todo.length) { row.next_action = 'After-sales: ' + todo.join(' + '); row.next_action_date = nextDate(lastFee); }
-      } else { row.next_action = 'Follow up on case processing'; row.next_action_date = nextDate(closedOn); }
+        // closed customers have no next action, only what was last done and when
+        if (rnd() < 0.5) { row.last_action = 'Checked in after case closed'; row.last_action_date = lastDate(lastFee); }
+      } else { row.last_action = pick(['Called bank about the case', 'Updated customer on progress', 'Sent documents to bank']); row.last_action_date = lastDate(closedOn); }
     } else if (reached >= 2 && rnd() < 0.2) { row.status = 'Lost'; row.lost_reason = pick(LOST); }
     else { row.next_action = reached === 8 ? 'Follow up to close' : NEXT_ACTION[reached - 1]; row.next_action_date = nextDate(d); }
   }
@@ -234,7 +238,7 @@ for (let i = 0; i < 40; i++) {
     const due = `${m}-25`;
     payments.push({ case_id: c.case_id, due_date: due, amount, ...(before(due, REPORTING_DATE) ? { paid_date: addDays(due, k % 3 - 1) } : {}) });
   });
-  row.next_action = 'Remind final installment (RM 1,100)'; row.next_action_date = '2026-11-23';
+  row.last_action = 'Reminded about the final installment (RM 1,100)'; row.last_action_date = '2026-11-10';
   leads.push(row);
 }
 if (BLANK) { leads.length = 0; cases.length = 0; payments.length = 0; freebies.length = 0; }
@@ -272,6 +276,11 @@ if (UPGRADE) {
     for (const r of s.data.slice(1)) {
       const row = {};
       head.forEach((h, i) => { if (h && !(AUTO[sheet] && h in AUTO[sheet]) && r[i] !== null && r[i] !== '') row[h] = toIso(r[i]); });
+      // closed customers keep no next action: move it to "last action" (what was last done)
+      if (sheet === 'Leads' && String(row.status || '').trim().toLowerCase() === 'won' && row.next_action && !row.last_action && !row.last_action_date) {
+        row.last_action = row.next_action; row.last_action_date = row.next_action_date;
+        delete row.next_action; delete row.next_action_date;
+      }
       if (Object.keys(row).length) list.push(row);
     }
   }

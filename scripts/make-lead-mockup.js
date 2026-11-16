@@ -94,6 +94,8 @@ table.cases td { vertical-align: middle; } table.cases tr { cursor: pointer; } t
 table.cases tr.cont td { border-top: 0; padding-top: 2px; }
 table.cases .nm { font-weight: 650; } table.cases .sub { font-size: 12px; color: var(--muted); }
 tr.zero td { color: var(--muted); }
+.count:empty { display: none; }
+@media (max-width: 560px) { .list li { flex-wrap: wrap; } .list .grow { flex: 1 1 60%; } .list .when { margin-left: auto; } }
 .card.warn { box-shadow: 0 0 0 1px var(--overdue); margin-bottom: 16px; } .card.warn h2 { color: var(--overdue); }
 .tag.own { background: #10301C; color: var(--brand); } .tag.agent { background: #2A2342; color: #C9BDF5; }
 .filters .sep { width: 1px; align-self: stretch; background: var(--border); margin: 0 4px; }
@@ -250,7 +252,16 @@ const afterSales = won.filter(l => l.cases.length && l.cases.every(c => c.state 
 for (const l of afterSales) l.allClosedDate = l.cases.map(c => c.closedDate).sort().at(-1);
 const afterSalesDue = afterSales.filter(l => !l.coi_date || !l.telegram_promoted_date);
 const RM = n => 'RM ' + Number(n).toLocaleString('en-MY');
-const follow = leads.filter(l => l.next_action_date).sort((a, b) => a.next_action_date.localeCompare(b.next_action_date));
+// customers who already closed (cases in processing / after-sales) are routine follow-ups: no red marks
+// Closed customers (Won) have no next action: only when something was last done for them.
+// Last action = the latest of last_action_date and every dated event on their cases, payments and after-sales.
+for (const l of won) {
+  l.lastActionDate = [l.last_action_date, l.h08_followup_date, l.coi_date, l.telegram_promoted_date,
+    ...l.cases.flatMap(c => [c.closed_date, c.processing_date, c.closedDate, ...c.plan.map(p => p.paid_date)])].filter(Boolean).sort().at(-1) || null;
+}
+const ago = d => { if (!d) return 'no date yet'; const n = days(d, RD); return n <= 0 ? 'today' : n === 1 ? '1 day ago' : n + ' days ago'; };
+const follow = leads.filter(l => l.status !== 'Won' && l.next_action_date).sort((a, b) => a.next_action_date.localeCompare(b.next_action_date));
+const caseFollow = won.slice().sort((a, b) => (a.lastActionDate || '').localeCompare(b.lastActionDate || '')); // longest ago first
 const overdue = follow.filter(l => l.next_action_date < RD);
 const today = follow.filter(l => l.next_action_date === RD);
 const STUCK = 7;
@@ -279,16 +290,16 @@ function instTag(c) {
   if (c.badInstallment) return h('span', { class: 'tag bad', title: 'Installment is only for ' + INSTALLMENT_PRODUCTS.join(', ') }, '! Installment not allowed');
   return c.isInstallment ? h('span', { class: 'tag inst' }, 'Installment') : null;
 }
-function whenText(d) {
+function whenText(d, calm) {
   const n = days(RD, d);
-  if (n < 0) return h('span', { class: 'od' }, '! ' + -n + (n === -1 ? ' day' : ' days') + ' overdue');
-  if (n === 0) return h('span', { class: 'od' }, 'Today');
+  if (n < 0) return calm ? fmt(d) + ' (' + -n + (n === -1 ? ' day ago)' : ' days ago)') : h('span', { class: 'od' }, '! ' + -n + (n === -1 ? ' day' : ' days') + ' overdue');
+  if (n === 0) return calm ? 'Today' : h('span', { class: 'od' }, 'Today');
   return fmt(d) + ' (in ' + n + (n === 1 ? ' day)' : ' days)');
 }
 function leadRow(l, right) {
   return h('li', { onclick: () => openLead(l) },
     catTag(l),
-    h('div', { class: 'grow' }, h('div', null, l.name, ' ', srcTag(l)), h('div', { class: 'sub' }, stageName(l) + ' · ' + l.platform + (l.next_action ? ' · Next: ' + l.next_action : ''))),
+    h('div', { class: 'grow' }, h('div', null, l.name, ' ', srcTag(l)), h('div', { class: 'sub' }, stageName(l) + ' · ' + l.platform + (l.status === 'Won' ? (l.last_action ? ' · Last: ' + l.last_action : '') : l.next_action ? ' · Next: ' + l.next_action : ''))),
     h('div', { class: 'when' }, right));
 }
 function pageHead(title, extra) {
@@ -320,7 +331,7 @@ function overview() {
     pageHead('Overview', leads.length + (leads.length === 1 ? ' lead' : ' leads') + ' in total'),
     h('div', { class: 'tiles' },
       tile('Active HOT leads', activeHot.length, 'Won ' + won.length + ' · lost ' + lost.length + ' · close rate ' + closeRate + '%', 'hero'),
-      tile('To follow up', overdue.length + today.length, 'Overdue ' + overdue.length + ' · today ' + today.length, 'alert'),
+      tile('To follow up', overdue.length + today.length, 'Overdue ' + overdue.length + ' · today ' + today.length, overdue.length + today.length ? 'alert' : ''),
       tile('New leads this month', newThisMonth.length, 'HOT ' + newThisMonth.filter(l => l.category === 'HOT').length + ' · COLD ' + newThisMonth.filter(l => l.category === 'COLD').length),
       tile('Case Closed this month', closedThisMonth.length, 'Fee collected · ' + processing.length + ' still processing'),
       tile('COLD leads', cold.length, 'In Telegram group: ' + cold.filter(l => l.coldStep >= 2).length)),
@@ -441,9 +452,11 @@ function afterSalesPage() {
 function followup() {
   const next7 = follow.filter(l => l.next_action_date > RD && days(RD, l.next_action_date) <= 7);
   const later = follow.filter(l => days(RD, l.next_action_date) > 7);
-  const group = (title, ls) => ls.length ? [h('div', { class: 'group-h' }, title + ' (' + ls.length + ')'), h('ul', { class: 'list' }, ls.map(l => leadRow(l, whenText(l.next_action_date))))] : [];
+  const group = (title, ls, calm) => ls.length ? [h('div', { class: 'group-h' }, title + ' (' + ls.length + ')'), h('ul', { class: 'list' }, ls.map(l => leadRow(l, whenText(l.next_action_date, calm))))] : [];
   return [pageHead('Follow-ups', 'Sorted by next-action date'),
-    h('div', { class: 'card' }, group('Overdue', overdue), group('Today', today), group('Next 7 days', next7), group('Later', later))];
+    h('div', { class: 'card' }, follow.length ? [group('Overdue', overdue), group('Today', today), group('Next 7 days', next7), group('Later', later)].flat() : h('p', { class: 'muted' }, 'No lead follow-ups.')),
+    caseFollow.length ? h('div', { class: 'card' }, h('h2', null, 'Closed customers: last action'), h('p', { class: 'muted small' }, 'No next action for customers who already closed, only how long ago something was last done. Longest ago first.'),
+      h('ul', { class: 'list' }, caseFollow.map(l => leadRow(l, h('span', { class: 'muted' }, 'Last action ' + ago(l.lastActionDate)))))) : null];
 }
 function coldPage() {
   const pool = leads.filter(l => l.c1_telegram_promoted_date || l.category === 'COLD');
@@ -481,7 +494,8 @@ function openLead(l) {
         l.phone ? [h('dt', null, 'Phone'), h('dd', null, l.phone)] : null,
         l.problem ? [h('dt', null, 'Problem'), h('dd', null, l.problem)] : null,
         h('dt', null, 'Now'), h('dd', null, stageName(l)),
-        l.next_action ? [h('dt', null, 'Next'), h('dd', null, l.next_action, ' · ', whenText(l.next_action_date))] : null,
+        l.status === 'Won' ? [h('dt', null, 'Last action'), h('dd', null, (l.last_action ? l.last_action + ' · ' : '') + (l.lastActionDate ? fmt(l.lastActionDate) + ' (' + ago(l.lastActionDate) + ')' : 'no date yet'))]
+          : l.next_action ? [h('dt', null, 'Next'), h('dd', null, l.next_action, ' · ', whenText(l.next_action_date))] : null,
         l.lost_reason ? [h('dt', null, 'Lost because'), h('dd', null, l.lost_reason)] : null),
       h('h3', null, 'Progress'),
       h('ul', { class: 'tl' }, steps.map(([k, label]) => h('li', { class: l[k] ? 'done' : '' }, h('span', { class: 'dot' }), label, h('span', { class: 'd' }, l[k] ? fmt(l[k]) : '')))),
@@ -514,7 +528,7 @@ function render() {
   document.querySelectorAll('nav a').forEach(a => a.classList.toggle('active', a.dataset.page === page));
 }
 document.getElementById('c-board').textContent = activeHot.length;
-document.getElementById('c-follow').textContent = overdue.length + today.length;
+document.getElementById('c-follow').textContent = overdue.length + today.length || ''; // red dot only for leads that still need closing
 document.getElementById('c-cases').textContent = processing.length + needProduct.length;
 document.getElementById('c-after').textContent = afterSalesDue.length;
 document.getElementById('c-cold').textContent = cold.length;
