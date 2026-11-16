@@ -8,6 +8,14 @@ dist/
 *credentials*.json
 *service-account*.json
 
+# Your own leads (real customers' personal details): stay on this computer only
+data/leads/My_*.xlsx
+mockups/my-*.html
+~$*.xlsx
+
+# Local preview settings
+.claude/
+
 # Local scratch files
 *.tmp.*
 *.log

@@ -9,7 +9,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const OUT = path.join(root, 'data/leads/Lead_Practice.xlsx');
+// `--blank <file>` writes the same layout with no rows: a workbook for your own leads.
+// `--upgrade <file>` rewrites your own workbook in the latest layout and keeps every row
+// (a backup copy is saved next to it first).
+const blankAt = process.argv.indexOf('--blank');
+const upAt = process.argv.indexOf('--upgrade');
+const UPGRADE = upAt !== -1;
+const BLANK = blankAt !== -1 || UPGRADE;
+const OUT = UPGRADE ? path.resolve(process.argv[upAt + 1] || path.join(root, 'data/leads/My_Leads.xlsx'))
+  : BLANK ? path.resolve(process.argv[blankAt + 1] || path.join(root, 'data/leads/My_Leads.xlsx')) : path.join(root, 'data/leads/Lead_Practice.xlsx');
 const REPORTING_DATE = '2026-11-14';
 
 // ---------- the layout ----------
@@ -54,7 +62,8 @@ const LEAD_COLUMNS = [
 ];
 const CASE_COLUMNS = [
   ['case_id', 'Case ID, must be unique (one row per product a customer closed)', 'C-0001'],
-  ['lead_id', 'The lead ID from the Leads sheet', 'L-0002'],
+  ['lead_id', 'The lead ID from the Leads sheet (pick from the list)', 'L-0002'],
+  ['customer', 'Filled in automatically from the Leads sheet: do not type here', ''],
   ['product', 'Product closed (pick from the list)', PRODUCTS.join(' / ')],
   ['closed_date', 'Date this product was closed with the customer', '2026-10-26'],
   ['processing_date', 'Date case processing started', '2026-10-28'],
@@ -63,13 +72,16 @@ const CASE_COLUMNS = [
   ['notes', 'Notes', ''],
 ];
 const PAYMENT_COLUMNS = [
-  ['case_id', 'The case ID from the Cases sheet (installment cases only)', 'C-0002'],
+  ['case_id', 'The case ID from the Cases sheet, installment cases only (pick from the list)', 'C-0002'],
+  ['customer', 'Filled in automatically from the Cases sheet: do not type here', ''],
+  ['product', 'Filled in automatically from the Cases sheet: do not type here', ''],
   ['due_date', 'When this installment is due', '2026-03-05'],
   ['amount', 'Amount of this installment in RM (numbers only)', '6000'],
   ['paid_date', 'Date it was paid (blank = not paid yet)', '2026-03-04'],
 ];
 const FREEBIE_COLUMNS = [
-  ['lead_id', 'The lead ID from the Leads sheet', 'L-0005'],
+  ['lead_id', 'The lead ID from the Leads sheet (pick from the list)', 'L-0005'],
+  ['name', 'Filled in automatically from the Leads sheet: do not type here', ''],
   ['freebie', 'What was given', 'MoneyBuddy DSR report'],
   ['sent_date', 'Date it was sent', '2026-11-10'],
 ];
@@ -225,42 +237,86 @@ for (let i = 0; i < 40; i++) {
   row.next_action = 'Remind final installment (RM 1,100)'; row.next_action_date = '2026-11-23';
   leads.push(row);
 }
+if (BLANK) { leads.length = 0; cases.length = 0; payments.length = 0; freebies.length = 0; }
+
+// Columns Excel fills in itself (looked up by ID); {r} is the row number.
+const AUTO = {
+  Cases: { customer: 'IFERROR(INDEX(Leads!$B:$B,MATCH($B{r},Leads!$A:$A,0)),"")' },
+  Payments: { customer: 'IFERROR(INDEX(Cases!$C:$C,MATCH($A{r},Cases!$A:$A,0)),"")', product: 'IFERROR(INDEX(Cases!$D:$D,MATCH($A{r},Cases!$A:$A,0)),"")' },
+  Freebies: { name: 'IFERROR(INDEX(Leads!$B:$B,MATCH($A{r},Leads!$A:$A,0)),"")' },
+};
+const AUTO_ROWS = 500; // formulas are ready on this many rows
+const LAYOUT = { Leads: LEAD_COLUMNS, Cases: CASE_COLUMNS, Payments: PAYMENT_COLUMNS, Freebies: FREEBIE_COLUMNS };
+// extra columns you added yourself are kept, at the end of their sheet
+const EXTRA = { Leads: [], Cases: [], Payments: [], Freebies: [] };
+if (UPGRADE) {
+  const { existsSync, copyFileSync } = await import('node:fs');
+  if (!existsSync(OUT)) { console.error(`Not found: ${OUT}`); process.exit(1); }
+  if (existsSync(path.join(path.dirname(OUT), '~$' + path.basename(OUT)))) {
+    console.error('The workbook is open in Excel. Close it first (so your later save does not undo the upgrade), then run this again.');
+    process.exit(1);
+  }
+  let n = 1; let backup;
+  do { backup = OUT.replace(/\.xlsx$/i, `.backup-${n}.xlsx`); n++; } while (existsSync(backup));
+  copyFileSync(OUT, backup);
+  const { default: readXlsx } = await import('read-excel-file/node');
+  const old = await readXlsx(OUT);
+  const toIso = v => (v instanceof Date ? v.toISOString().slice(0, 10) : v);
+  const target = { Leads: leads, Cases: cases, Payments: payments, Freebies: freebies };
+  for (const [sheet, list] of Object.entries(target)) {
+    const s = old.find(x => x.sheet === sheet);
+    if (!s || !s.data.length) continue;
+    const head = s.data[0].map(h => String(h ?? '').trim());
+    const known = new Set(LAYOUT[sheet].map(c => c[0]));
+    EXTRA[sheet] = head.filter(h => h && !known.has(h));
+    for (const r of s.data.slice(1)) {
+      const row = {};
+      head.forEach((h, i) => { if (h && !(AUTO[sheet] && h in AUTO[sheet]) && r[i] !== null && r[i] !== '') row[h] = toIso(r[i]); });
+      if (Object.keys(row).length) list.push(row);
+    }
+  }
+  console.log(`Backup saved: ${path.relative(root, backup)}`);
+}
 
 // ---------- a minimal .xlsx writer ----------
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const colName = n => { let s = ''; for (n++; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + ((n - 1) % 26)) + s; return s; };
 const excelSerial = iso => (Date.parse(`${iso}T00:00:00Z`) - Date.UTC(1899, 11, 30)) / 86400000;
 const isDateCol = id => id.endsWith('_date');
-// style 0 = normal, 1 = date (yyyy-mm-dd), 2 = bold header
-function sheetXml(columns, rows, widths, lists = {}) {
+// style 0 = normal, 1 = date (yyyy-mm-dd), 2 = bold header, 3 = number, 4 = grey italic (filled in automatically)
+function sheetXml(columns, rows, widths, lists = {}, auto = {}) {
   const cell = (r, c, v, id) => {
     const ref = `${colName(c)}${r}`;
+    if (id && auto[id]) return `<c r="${ref}" t="str" s="4"><f>${esc(auto[id].replace(/\{r\}/g, r))}</f></c>`;
     if (v === undefined || v === null || v === '') return '';
-    if (id && isDateCol(id)) return `<c r="${ref}" s="1"><v>${excelSerial(v)}</v></c>`;
+    if (id && isDateCol(id) && /^\d{4}-\d{2}-\d{2}$/.test(v)) return `<c r="${ref}" s="1"><v>${excelSerial(v)}</v></c>`;
     if (typeof v === 'number') return `<c r="${ref}" s="3"><v>${v}</v></c>`;
+    if (typeof v === 'boolean') return `<c r="${ref}" t="b"><v>${v ? 1 : 0}</v></c>`;
     return `<c r="${ref}" t="inlineStr"${id ? '' : ' s="2"'}><is><t>${esc(v)}</t></is></c>`;
   };
   const head = `<row r="1">${columns.map((c, i) => cell(1, i, c, null)).join('')}</row>`;
-  const body = rows.map((row, ri) => `<row r="${ri + 2}">${columns.map((c, i) => cell(ri + 2, i, row[c], c)).join('')}</row>`).join('');
-  const cols = `<cols>${columns.map((c, i) => `<col min="${i + 1}" max="${i + 1}" width="${widths?.[i] ?? (isDateCol(c) ? 13 : Math.max(12, c.length + 2))}" customWidth="1"/>`).join('')}</cols>`;
+  const n = Object.keys(auto).length ? Math.max(rows.length, AUTO_ROWS) : rows.length;
+  const body = Array.from({ length: n }, (_, ri) => `<row r="${ri + 2}">${columns.map((c, i) => cell(ri + 2, i, (rows[ri] || {})[c], c)).join('')}</row>`).join('');
+  const cols = `<cols>${columns.map((c, i) => `<col min="${i + 1}" max="${i + 1}" width="${widths?.[i] ?? (auto[c] ? 22 : isDateCol(c) ? 13 : Math.max(12, c.length + 2))}" customWidth="1"${isDateCol(c) ? ' style="1"' : c === 'amount' ? ' style="3"' : ''}/>`).join('')}</cols>`;
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>${cols}<sheetData>${head}${body}</sheetData>${validations(columns, lists)}</worksheet>`;
 }
-// drop-down lists in Excel (e.g. product names), rows 2-2000
+// drop-down lists in Excel, rows 2-2000: a fixed list (e.g. product names) or a range on another sheet (e.g. the lead IDs)
 function validations(columns, lists) {
-  const v = Object.entries(lists).map(([col, values]) => {
+  const v = Object.entries(lists).filter(([col]) => columns.includes(col)).map(([col, values]) => {
     const L = colName(columns.indexOf(col));
-    return `<dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="${L}2:${L}2000"><formula1>"${esc(values.join(','))}"</formula1></dataValidation>`;
+    const f = Array.isArray(values) ? `"${esc(values.join(','))}"` : esc(values);
+    return `<dataValidation type="list" allowBlank="1" showErrorMessage="${Array.isArray(values) ? 1 : 0}" sqref="${L}2:${L}2000"><formula1>${f}</formula1></dataValidation>`;
   });
   return v.length ? `<dataValidations count="${v.length}">${v.join('')}</dataValidations>` : '';
 }
 // the "Guide" sheet is all text (no id), so give it plain rows
 function guideXml() {
   const lines = [
-    ['Lead practice workbook (Lead_Practice.xlsx)'],
-    [`Every name, phone number and problem here is invented practice data. Reporting date: ${REPORTING_DATE}.`],
+    [BLANK ? `Lead workbook (${path.basename(OUT)})` : 'Lead practice workbook (Lead_Practice.xlsx)'],
+    [BLANK ? 'Your own leads. Keep this file on your computer: it holds personal details and is never uploaded to GitHub.' : `Every name, phone number and problem here is invented practice data. Reporting date: ${REPORTING_DATE}.`],
     ['How to use: one row per lead on the Leads sheet. When a lead reaches a step, fill in that step\'s date; the dashboard takes the last filled date as the current stage.'],
-    ['When a customer closes, add one row per product on the Cases sheet (a customer can close several products at once) and set the lead\'s status to Won.'],
+    ['When a customer closes, add one row per product on the Cases sheet (a customer can close several products at once) and set the lead\'s status to Won. Pick the lead_id from the list; the customer\'s name then appears by itself (grey columns are filled in automatically).'],
     ['Installment cases: put every payment on the Payments sheet (due date, amount, paid date). The case closes only when every payment is paid. After-sales (COI, Telegram group) is per customer on the Leads sheet.'],
     [''],
     ['Sheet', 'Column', 'Meaning', 'Example'],
@@ -275,10 +331,10 @@ function guideXml() {
 }
 
 const SHEETS = [
-  ['Leads', sheetXml(LEAD_COLUMNS.map(c => c[0]), leads, null, { category: ['HOT', 'COLD'], status: ['Active', 'Won', 'Lost'] })],
-  ['Cases', sheetXml(CASE_COLUMNS.map(c => c[0]), cases, [10, 10, 20, 13, 15, 18, 12, 24], { product: PRODUCTS, installment: ['Yes'] })],
-  ['Payments', sheetXml(PAYMENT_COLUMNS.map(c => c[0]), payments, [10, 13, 12, 13])],
-  ['Freebies', sheetXml(FREEBIE_COLUMNS.map(c => c[0]), freebies, [12, 34, 13])],
+  ['Leads', sheetXml(LEAD_COLUMNS.map(c => c[0]).concat(EXTRA.Leads), leads, null, { category: ['HOT', 'COLD'], status: ['Active', 'Won', 'Lost'] })],
+  ['Cases', sheetXml(CASE_COLUMNS.map(c => c[0]).concat(EXTRA.Cases), cases, [10, 10, 22, 20, 13, 15, 18, 12, 24], { lead_id: 'Leads!$A$2:$A$2000', product: PRODUCTS, installment: ['Yes'] }, AUTO.Cases)],
+  ['Payments', sheetXml(PAYMENT_COLUMNS.map(c => c[0]).concat(EXTRA.Payments), payments, [10, 22, 18, 13, 12, 13], { case_id: 'Cases!$A$2:$A$2000' }, AUTO.Payments)],
+  ['Freebies', sheetXml(FREEBIE_COLUMNS.map(c => c[0]).concat(EXTRA.Freebies), freebies, [12, 22, 34, 13], { lead_id: 'Leads!$A$2:$A$2000' }, AUTO.Freebies)],
   ['Guide', guideXml()],
 ];
 const files = {
@@ -287,11 +343,11 @@ const files = {
   '_rels/.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
   'xl/workbook.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${SHEETS.map(([name], i) => `<sheet name="${esc(name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets></workbook>`,
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${SHEETS.map(([name], i) => `<sheet name="${esc(name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>`,
   'xl/_rels/workbook.xml.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${SHEETS.map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')}<Relationship Id="rId${SHEETS.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
   'xl/styles.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="yyyy-mm-dd"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="4"><xf/><xf numFmtId="164" applyNumberFormat="1"/><xf fontId="1" applyFont="1"/><xf numFmtId="3" applyNumberFormat="1"/></cellXfs></styleSheet>`,
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="yyyy-mm-dd"/></numFmts><fonts count="3"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font><font><i/><sz val="11"/><color rgb="FF7F7F7F"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="5"><xf/><xf numFmtId="164" applyNumberFormat="1"/><xf fontId="1" applyFont="1"/><xf numFmtId="3" applyNumberFormat="1"/><xf fontId="2" applyFont="1"/></cellXfs></styleSheet>`,
 };
 SHEETS.forEach(([, xml], i) => { files[`xl/worksheets/sheet${i + 1}.xml`] = xml; });
 

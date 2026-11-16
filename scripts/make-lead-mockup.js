@@ -8,15 +8,20 @@ import { fileURLToPath } from 'node:url';
 import readXlsxFile from 'read-excel-file/node';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const SRC = path.join(root, 'data/leads/Lead_Practice.xlsx');
-const OUT = path.join(root, 'mockups/lead-dashboard.html');
+// Optional: node scripts/make-lead-mockup.js <your workbook.xlsx> <output.html>
+const SRC = path.resolve(process.argv[2] || path.join(root, 'data/leads/Lead_Practice.xlsx'));
+const OUT = path.resolve(process.argv[3] || path.join(root, 'mockups/lead-dashboard.html'));
+const PRACTICE = path.basename(SRC) === 'Lead_Practice.xlsx';
 
-const iso = v => (v instanceof Date ? v.toISOString().slice(0, 10) : v == null ? null : String(v));
+const iso = v => (v instanceof Date ? v.toISOString().slice(0, 10) : v == null ? null : String(v).trim());
 const sheets = await readXlsxFile(SRC);
 const table = name => {
   const s = sheets.find(x => x.sheet === name);
-  const [head, ...rows] = s.data;
-  return rows.map(r => Object.fromEntries(head.map((h, i) => [h, h.endsWith('_date') ? iso(r[i]) : r[i]])));
+  if (!s || !s.data.length) return [];
+  const head = s.data[0].map(h => String(h ?? '').trim());
+  // skip empty rows; trim text
+  return s.data.slice(1).filter(r => r.some(v => v !== null && v !== ''))
+    .map(r => Object.fromEntries(head.map((h, i) => [h, h.endsWith('_date') ? iso(r[i]) : typeof r[i] === 'string' ? r[i].trim() : r[i]])));
 };
 const data = { leads: table('Leads'), cases: table('Cases'), payments: table('Payments'), freebies: table('Freebies') };
 const json = JSON.stringify(data).replace(/</g, '\\u003c');
@@ -89,6 +94,7 @@ table.cases td { vertical-align: middle; } table.cases tr { cursor: pointer; } t
 table.cases tr.cont td { border-top: 0; padding-top: 2px; }
 table.cases .nm { font-weight: 650; } table.cases .sub { font-size: 12px; color: var(--muted); }
 tr.zero td { color: var(--muted); }
+.card.warn { box-shadow: 0 0 0 1px var(--overdue); margin-bottom: 16px; } .card.warn h2 { color: var(--overdue); }
 .tag.own { background: #10301C; color: var(--brand); } .tag.agent { background: #2A2342; color: #C9BDF5; }
 .filters .sep { width: 1px; align-self: stretch; background: var(--border); margin: 0 4px; }
 .paybar { display: flex; align-items: center; gap: 8px; margin: 4px 0 2px; } .paybar .bar { flex: 1; max-width: 160px; height: 8px; }
@@ -143,7 +149,7 @@ dt { color: var(--muted); }
 </style>
 </head>
 <body>
-<div class="ribbon"><strong>Mockup</strong> · shows the planned lead dashboard with invented practice data (Lead_Practice.xlsx). Not the real version yet.</div>
+<div class="ribbon">${PRACTICE ? '<strong>Mockup</strong> · shows the planned lead dashboard with invented practice data (Lead_Practice.xlsx). Not the real version yet.' : '<strong>Mockup with your own data</strong> · from ' + path.basename(SRC).replace(/[<>&"]/g, '') + '. Stays on this computer; not uploaded.'}</div>
 <div class="topbar"><span class="mark"></span>Lead dashboard</div>
 <div class="layout">
   <nav id="nav">
@@ -189,14 +195,20 @@ function h(tag, attrs, ...kids) {
 }
 const days = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const fmt = d => { const [y, m, dd] = d.split('-'); return Number(dd) + ' ' + MONTHS[Number(m) - 1]; };
+const fmt = d => { if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return d || '—'; const [y, m, dd] = d.split('-'); return Number(dd) + ' ' + MONTHS[Number(m) - 1]; };
 
 // ---- derived facts ----
 // (payment due dates are plans, not events, so only paid dates count)
 const allDates = DATA.leads.concat(DATA.cases).flatMap(l => Object.entries(l).filter(([k, v]) => k.endsWith('_date') && k !== 'next_action_date' && v).map(([, v]) => v))
   .concat(DATA.payments.map(p => p.paid_date).filter(Boolean));
-const RD = allDates.sort().at(-1); // reporting date = latest recorded event in the file
+const RD = allDates.sort().at(-1) || '2000-01-01'; // reporting date = latest recorded event in the file (placeholder when empty)
 for (const l of DATA.leads) {
+  // forgiving about how things were typed: hot/HOT, won/Won, blank status = Active
+  l.category = String(l.category || '').trim().toUpperCase() === 'COLD' ? 'COLD' : String(l.category || '').trim() ? 'HOT' : (l.phone ? 'HOT' : 'COLD');
+  l.status = ({ active: 'Active', won: 'Won', lost: 'Lost' })[String(l.status || '').trim().toLowerCase()] || 'Active';
+  l.name = l.name || l.lead_id || '(no name)';
+  l.platform = l.platform || '—';
+  l.first_contact_date = l.first_contact_date || l.h01_phone_date || '';
   l.stage = 0; l.stageDate = null;
   HOT.forEach(([k], i) => { if (l[k]) { l.stage = i + 1; l.stageDate = l[k]; } });
   l.coldStep = 0; COLD.forEach(([k], i) => { if (l[k]) l.coldStep = i + 1; });
@@ -232,6 +244,7 @@ const month = RD.slice(0, 7);
 const newThisMonth = leads.filter(l => l.first_contact_date.startsWith(month));
 const closedThisMonth = cases.filter(c => (c.closedDate || '').startsWith(month));
 const processing = cases.filter(c => c.state !== 'Closed');
+const needProduct = won.filter(l => !l.cases.length); // marked Won but nothing on the Cases sheet yet
 // after-sales: customers whose products are all closed (fee fully collected)
 const afterSales = won.filter(l => l.cases.length && l.cases.every(c => c.state === 'Closed'));
 for (const l of afterSales) l.allClosedDate = l.cases.map(c => c.closedDate).sort().at(-1);
@@ -248,7 +261,7 @@ function catTag(l) {
   if (l.status === 'Lost') return h('span', { class: 'tag lost' }, 'Lost');
   return h('span', { class: 'tag ' + (l.category === 'HOT' ? 'hot' : 'cold') }, l.category);
 }
-const stageName = l => l.status === 'Won' ? 'Closed ' + l.cases.length + (l.cases.length === 1 ? ' product' : ' products')
+const stageName = l => l.status === 'Won' && !l.cases.length ? 'Won · no product added yet' : l.status === 'Won' ? 'Closed ' + l.cases.length + (l.cases.length === 1 ? ' product' : ' products')
   : l.category === 'HOT' ? (l.stage ? HOT[l.stage - 1][1] : '—') : (l.coldStep ? COLD[l.coldStep - 1][1] : 'PM only');
 // who the case belongs to: your own, or passed on by an agent
 function srcTag(l) {
@@ -304,7 +317,7 @@ function overview() {
     return [p, ls.length, 'HOT ' + ls.filter(l => l.category === 'HOT').length + ' · won ' + ls.filter(l => l.status === 'Won').length];
   }).sort((a, b) => b[1] - a[1]);
   return [
-    pageHead('Overview', leads.length + ' leads in total'),
+    pageHead('Overview', leads.length + (leads.length === 1 ? ' lead' : ' leads') + ' in total'),
     h('div', { class: 'tiles' },
       tile('Active HOT leads', activeHot.length, 'Won ' + won.length + ' · lost ' + lost.length + ' · close rate ' + closeRate + '%', 'hero'),
       tile('To follow up', overdue.length + today.length, 'Overdue ' + overdue.length + ' · today ' + today.length, 'alert'),
@@ -375,6 +388,9 @@ function casesPage() {
       h('td', { class: 'r num' }, cs.filter(c => c.state !== 'Closed').length), h('td', { class: 'r num' }, cs.filter(c => c.state === 'Closed').length), h('td', { class: 'r num' }, cs.filter(c => c.isInstallment).length));
   });
   return [pageHead('Cases', 'From case processing onwards: one line per product a customer closed'),
+    needProduct.length ? h('div', { class: 'card warn' }, h('h2', null, '! Won, but no product added yet (' + needProduct.length + ')'),
+      h('p', { class: 'muted small' }, 'Add one row per product on the Cases sheet (same lead_id), with closed_date and processing_date.'),
+      h('ul', { class: 'list' }, needProduct.map(l => leadRow(l, l.lead_id)))) : null,
     h('div', { class: 'tiles' },
       tile('Cases in processing', processing.length, 'of ' + cases.length + ' cases', 'hero'),
       tile('Case Closed this month', closedThisMonth.length, 'Fee collected'),
@@ -493,13 +509,13 @@ function render() {
   for (const id of Object.keys(PAGES)) {
     const sec = document.getElementById('p-' + id);
     sec.hidden = id !== page;
-    if (id === page) sec.replaceChildren(...PAGES[id]());
+    if (id === page) sec.replaceChildren(...PAGES[id]().filter(x => x != null));
   }
   document.querySelectorAll('nav a').forEach(a => a.classList.toggle('active', a.dataset.page === page));
 }
 document.getElementById('c-board').textContent = activeHot.length;
 document.getElementById('c-follow').textContent = overdue.length + today.length;
-document.getElementById('c-cases').textContent = processing.length;
+document.getElementById('c-cases').textContent = processing.length + needProduct.length;
 document.getElementById('c-after').textContent = afterSalesDue.length;
 document.getElementById('c-cold').textContent = cold.length;
 addEventListener('hashchange', () => { render(); scrollTo(0, 0); });
