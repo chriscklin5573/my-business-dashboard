@@ -1,45 +1,45 @@
-/* Business Dashboard Starter — neon-green control-room look (Nov 2026): dark green-black panels with
-   a thin green outline and soft glow on a near-black canvas, neon green for emphasis, a deep green
-   tint for selection, green pill buttons. Dark only by design. Text colours keep at least 4.5:1 contrast on the surface
+/* Business Dashboard Starter — dark teal night look (Nov 2026): near-black canvas with soft teal glows,
+   dark panels with a thin outline, soft teal for emphasis, a deep teal tint for selection,
+   teal gradient pill buttons. Dark only by design. Text colours keep at least 4.5:1 contrast on the surface
    they sit on; chart and calendar colours were lightened for the dark cards (≥ 3:1).
    Gold is decoration only, never text.
    No web fonts: the page must work offline, so it uses the fonts already on the computer. */
 :root {
   color-scheme: dark;
   /* brand */
-  --brand: #39E27A;        /* neon green: emphasis, links, the reporting date */
-  --on-brand: #04140A;     /* text on a --brand fill */
-  --brand-deep: #0E3A22;   /* 深酒红: the dark alert card */
-  --brand-soft: #0F2A1C;   /* deep wine tint: selected menu item, the main figure's card */
-  --brand-ink: #9CF5BE;    /* text on the wine tint */
-  --brand-ink-2: #6FD69A;  /* secondary text on the wine tint */
-  --gold: #1FAA55;         /* 古铜金: decoration only (the logo stripe) */
-  --page: #050806;         /* canvas behind the cards */
-  --surface: #0C1410;      /* cards */
-  --surface-2: #13201A;    /* soft fill: hover, tracks, code, side panel items */
-  --border: #1E3328;       /* hairlines */
-  --warm-grey: #4F6B5B;    /* lines and dashed note outline */
+  --brand: #5FD4C4;        /* soft teal: emphasis, links, the reporting date */
+  --on-brand: #05211D;     /* text on a --brand fill */
+  --brand-deep: #12403A;   /* 深酒红: the dark alert card */
+  --brand-soft: #143832;   /* deep wine tint: selected menu item, the main figure's card */
+  --brand-ink: #C2F2EA;    /* text on the wine tint */
+  --brand-ink-2: #8FD9CC;  /* secondary text on the wine tint */
+  --gold: #3FB8A8;         /* 古铜金: decoration only (the logo stripe) */
+  --page: #060B0B;         /* canvas behind the cards */
+  --surface: #0E1616;      /* cards */
+  --surface-2: #172222;    /* soft fill: hover, tracks, code, side panel items */
+  --border: #24363A;       /* hairlines */
+  --warm-grey: #4E6B66;    /* lines and dashed note outline */
   /* text */
-  --ink: #E6F2EA;          /* body text */
-  --ink-2: #B5CBBE;        /* secondary text */
-  --muted: #86A292;        /* captions */
+  --ink: #EAF4F2;          /* body text */
+  --ink-2: #BCD0CC;        /* secondary text */
+  --muted: #8FA7A3;        /* captions */
   /* buttons */
-  --btn: #39E27A;          /* primary button (light pill) */
-  --btn-hover: #5CF095;
-  --btn-ink: #04140A;      /* text on the primary button */
+  --btn: #1F7A70;          /* primary button (light pill) */
+  --btn-hover: #2A9184;
+  --btn-ink: #FFFFFF;      /* text on the primary button */
   /* charts (≥ 3:1 on the dark card) */
-  --accent: #39E27A;       /* series 1: wine step */
-  --accent-soft: #0F2A1C;
-  --series-2: #B6F09C;     /* series 2: gold step */
-  --series-3: #2CC6C0;     /* blue */
-  --grid: #14231B;
-  --axis: #2A4536;
+  --accent: #5FD4C4;       /* series 1: wine step */
+  --accent-soft: #143832;
+  --series-2: #F2C48F;     /* series 2: gold step */
+  --series-3: #8AA8F7;     /* blue */
+  --grid: #142222;
+  --axis: #2C4A47;
   /* calendar types: tint + text (≥ 7:1 on the tint) + dot */
   --pay-bg: #3A2C12;  --pay-ink: #F5D9A3;  --pay-dot: #E0A040;
   --fol-bg: #2A2342;  --fol-ink: #DCD3F7;  --fol-dot: #9D8AE0;
   --pro-bg: #233019;  --pro-ink: #D3E8BB;  --pro-dot: #7FB34A;
   --task-bg: #172A40; --task-ink: #C4DDF6; --task-dot: #4A90D9;
-  --note-bg: #16211B; --note-ink: #D3E3D9;
+  --note-bg: #141F1E; --note-ink: #D3E6E2;
   --overdue: #F0645A;      /* outline and mark for a past deadline (always with "!") */
   /* status: always shown with a word, never colour alone */
   --good: #6FB866;
@@ -51,13 +51,13 @@
   --critical-fill: #B8321F; /* fill behind white text */
   --radius: 14px;          /* controls and small panels */
   --radius-lg: 20px;       /* cards */
-  --shadow: 0 0 0 1px var(--border), 0 0 24px rgba(57, 226, 122, 0.06);
+  --shadow: 0 0 0 1px var(--border), 0 14px 34px rgba(0, 0, 0, 0.45);
   --nav-w: 236px;
   --font: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC", "Noto Sans CJK SC", "Source Han Sans SC", system-ui, sans-serif;
 }
 
 * { box-sizing: border-box; }
-html, body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.55 var(--font); -webkit-font-smoothing: antialiased; }
+html, body { margin: 0; background: radial-gradient(1100px 620px at 12% -12%, #123A36 0%, transparent 62%), radial-gradient(900px 640px at 105% 110%, #0D2B2A 0%, transparent 60%), var(--page); background-attachment: fixed; color: var(--ink); font: 15px/1.55 var(--font); -webkit-font-smoothing: antialiased; }
 [hidden] { display: none !important; }
 a { color: var(--brand); text-underline-offset: 3px; }
 h1, h2, h3 { margin: 0 0 8px; line-height: 1.25; color: var(--ink); font-weight: 700; text-wrap: balance; }
@@ -97,7 +97,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
 .segmented button:hover { background: var(--surface-2); }
 /* A long business name (the site's BUSINESS_NAME) is shortened with … on narrow screens; the other labels keep their size. */
 .segmented button.shrink { flex-shrink: 1; min-width: 4em; max-width: 12em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.segmented button.active { background: var(--btn); color: var(--btn-ink); font-weight: 600; }
+.segmented button.active { background: linear-gradient(90deg, #1F7A70, #134A44); color: var(--btn-ink); font-weight: 600; }
 .scn-note { font-size: 12.5px; color: var(--muted); }
 .scn-file { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink); background: var(--surface); border-radius: 999px; padding: 6px 14px; max-width: 300px; white-space: nowrap; }
 .scn-file > span { overflow: hidden; text-overflow: ellipsis; }
@@ -108,12 +108,12 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
 .sidenav a { display: flex; align-items: center; gap: 11px; padding: 9px 12px; border-radius: 12px; color: var(--ink-2); text-decoration: none; }
 .sidenav a .ico { color: var(--muted); }
 .sidenav a:hover { background: var(--surface-2); }
-.sidenav a.active { background: var(--brand-soft); color: var(--brand-ink); font-weight: 650; }
+.sidenav a.active { background: linear-gradient(90deg, #1F7A70 0%, rgba(31, 122, 112, 0.18) 100%); color: #fff; font-weight: 650; box-shadow: inset 0 0 0 1px rgba(95, 212, 196, 0.25); }
 .sidenav a.active .ico { color: var(--brand); }
 .sidenav a[hidden] { display: none !important; }
 .nav-label { flex: 1; min-width: 0; }
 .nav-label .en { color: var(--muted); font-size: 12px; font-weight: 400; }
-.sidenav a.active .nav-label .en { color: var(--brand-ink-2); }
+.sidenav a.active .nav-label .en { color: #E6FAF6; }
 .sidenav-foot { margin-top: auto; padding: 16px 8px 4px; display: flex; gap: 8px; align-items: flex-start; line-height: 1.5; }
 .sidenav-foot .ico { width: 15px; height: 15px; margin-top: 2px; }
 .count { background: var(--surface-2); border-radius: 999px; padding: 0 8px; font-size: 12px; color: var(--ink-2); font-weight: 600; }
@@ -140,7 +140,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
 a.btn { display: inline-block; text-decoration: none; margin-bottom: 8px; }
 .btn { font: inherit; font-size: 14px; border: 1px solid var(--border); background: var(--surface); color: var(--ink); padding: 8px 16px; border-radius: 999px; cursor: pointer; }
 .btn:hover { background: var(--surface-2); }
-.btn.primary { background: var(--btn); color: var(--btn-ink); border-color: transparent; font-weight: 600; }
+.btn.primary { background: linear-gradient(90deg, #1F7A70, #134A44); color: var(--btn-ink); border-color: transparent; font-weight: 600; box-shadow: 0 4px 14px rgba(31, 122, 112, 0.35); }
 .btn.primary:hover { background: var(--btn-hover); }
 .btn.ghost { background: transparent; }
 .btn.ghost:hover { background: var(--surface); }
@@ -179,7 +179,7 @@ a.btn { display: inline-block; text-decoration: none; margin-bottom: 8px; }
 .tile .delta.up { color: var(--good-text); } .tile .delta.down { color: var(--critical); }
 .tile .foot { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
 /* the main figure: rose card, large wine number; two columns wide on a wide screen */
-.tile.hero { background: var(--brand-soft); padding: 20px 22px; }
+.tile.hero { background: radial-gradient(circle at 85% -10%, rgba(95, 212, 196, 0.32), transparent 58%), linear-gradient(160deg, #163330, #0C1414); padding: 20px 22px; }
 .tile.hero .label, .tile.hero .foot { color: var(--brand-ink-2); }
 .tile.hero .value { color: var(--brand-ink); font-size: 42px; margin: 10px 0 8px; }
 .tile.hero .delta { display: inline-block; background: var(--surface); border-radius: 999px; padding: 3px 12px; font-weight: 600; color: var(--ink-2); }
@@ -188,7 +188,7 @@ a.btn { display: inline-block; text-decoration: none; margin-bottom: 8px; }
 @media (min-width: 1100px) { .overview-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 /* something to act on (overdue money, a data problem): the dark wine card */
 .tile.alert { background: var(--brand-deep); }
-.tile.alert .label, .tile.alert .foot { color: #A8F0C4; }
+.tile.alert .label, .tile.alert .foot { color: #BDEFE6; }
 .tile.alert .value { color: #fff; }
 .page-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 4px 0 14px; }
 .page-head h1 { flex: 1 1 auto; margin: 0; }
@@ -227,7 +227,7 @@ tr.clickable:hover { background: var(--surface-2); }
 .steps { padding-left: 20px; } .steps li { margin-bottom: 6px; }
 .pill-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
 .pill-tabs button { font: inherit; border: 1px solid var(--border); background: var(--surface); padding: 5px 14px; border-radius: 999px; cursor: pointer; color: var(--ink-2); font-size: 13px; }
-.pill-tabs button.active { background: var(--btn); color: var(--btn-ink); border-color: transparent; font-weight: 600; }
+.pill-tabs button.active { background: linear-gradient(90deg, #1F7A70, #134A44); color: var(--btn-ink); border-color: transparent; font-weight: 600; }
 
 /* tasks */
 .task { display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; padding: 14px 0; border-bottom: 1px solid var(--grid); }
@@ -272,9 +272,9 @@ tr.clickable:hover { background: var(--surface-2); }
 .cal-dow + .cal-dow, .cal-day:not(:nth-child(7n + 1)) { border-left: 1px solid var(--grid); }
 .cal-day { min-height: 104px; padding: 6px; border-top: 1px solid var(--grid); display: flex; flex-direction: column; gap: 4px; cursor: pointer; min-width: 0; position: relative; }
 .cal-dow + .cal-day, .cal-grid > .cal-day:nth-child(-n + 14) { border-top: 0; }
-.cal-day.weekend { background: #08100B; }
-.cal-day:hover { background: #16261D; }
-.cal-day.selected { background: #173022; box-shadow: inset 0 0 0 2px var(--brand); }
+.cal-day.weekend { background: #0A1111; }
+.cal-day:hover { background: #162A28; }
+.cal-day.selected { background: #133631; box-shadow: inset 0 0 0 2px var(--brand); }
 .cal-day .d { font: inherit; font-size: 13px; font-weight: 650; color: var(--ink); width: 26px; height: 26px; border-radius: 50%; border: 0; background: transparent; display: grid; place-items: center; cursor: pointer; padding: 0; }
 .cal-day.other .d { color: var(--muted); font-weight: 400; }
 .cal-day.today .d { background: var(--brand); color: var(--on-brand); }
@@ -303,7 +303,7 @@ tr.clickable:hover { background: var(--surface-2); }
 .cal-more:hover { color: var(--brand); text-decoration: underline; }
 .cal-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
 .cal-wday { background: var(--surface-2); border-radius: var(--radius); padding: 10px 8px; min-height: 220px; cursor: pointer; min-width: 0; }
-.cal-wday.selected { box-shadow: inset 0 0 0 2px var(--brand); background: #173022; }
+.cal-wday.selected { box-shadow: inset 0 0 0 2px var(--brand); background: #133631; }
 .wd-head { display: flex; flex-direction: column; font-size: 12.5px; font-weight: 650; margin-bottom: 8px; }
 .cal-wday.today .wd-head > span:first-child { color: var(--brand); }
 .cal-list { display: flex; flex-direction: column; gap: 8px; }
@@ -316,7 +316,7 @@ tr.clickable:hover { background: var(--surface-2); }
 .ag-sub { margin: 4px 0 14px; }
 .ag-section { font-size: 12.5px; color: var(--muted); margin: 18px 0 10px; }
 .agenda-item { display: flex; gap: 12px; align-items: center; width: 100%; text-align: left; font: inherit; border: 0; background: var(--surface-2); border-radius: 16px; padding: 11px 12px; margin-bottom: 8px; cursor: pointer; color: var(--ink); }
-.agenda-item:hover { background: #16261D; }
+.agenda-item:hover { background: #162A28; }
 .agenda-item.overdue { box-shadow: inset 0 0 0 1.5px var(--overdue); }
 .ai-icon { width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; flex: none; background: var(--note-bg); color: var(--note-ink); }
 .agenda-item.t-payment .ai-icon { background: var(--pay-bg); color: var(--pay-ink); }
