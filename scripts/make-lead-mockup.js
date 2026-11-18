@@ -42,6 +42,11 @@ const table = name => {
 };
 const data = { leads: table('Leads'), cases: table('Cases'), payments: table('Payments'), freebies: table('Freebies') };
 const json = JSON.stringify(data).replace(/</g, '\\u003c');
+// the shared workbook layout + .xlsx writer, embedded so "Save to Excel" works offline
+const LW_SRC = bgRead(path.join(root, 'scripts/lead-workbook.js'), 'utf8').replace(/^export /gm, '');
+// a short signature of this data: edits kept in the browser belong to this exact version of the workbook
+let sigH = 5381; for (let i = 0; i < json.length; i++) sigH = ((sigH * 33) ^ json.charCodeAt(i)) >>> 0;
+const SIG = path.basename(SRC) + ':' + sigH.toString(36);
 // a fixed star field for the background (original art, no images downloaded)
 let starSeed = 7;
 const sr = () => ((starSeed = (starSeed * 16807) % 2147483647) / 2147483647);
@@ -118,7 +123,8 @@ nav a.active .count { background: var(--surface); }
 main { min-width: 0; }
 .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin: 4px 0 14px; }
 .head h1 { margin: 0; }
-.rd { background: var(--brand); color: var(--on-brand); border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 650; }
+.rd { display: inline-flex; align-items: center; gap: 6px; background: rgba(190, 150, 255, 0.12); color: var(--brand-ink); border: 1px solid rgba(200, 160, 255, 0.5); border-radius: 999px; padding: 2px 12px 2px 9px; font-size: 12.5px; font-weight: 600; letter-spacing: 0.04em; box-shadow: 0 0 12px rgba(170, 120, 255, 0.28), inset 0 0 10px rgba(190, 150, 255, 0.10); backdrop-filter: var(--haze); -webkit-backdrop-filter: var(--haze); }
+.rd::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--blue); box-shadow: 0 0 8px var(--blue); }
 .card { backdrop-filter: var(--haze); -webkit-backdrop-filter: var(--haze); background: var(--panel); border-radius: 20px; padding: 18px 20px; min-width: 0; box-shadow: var(--glow); }
 .card + .card, .tiles + .card, .grid + .card, .card + .grid { margin-top: 16px; }
 .tiles { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); margin-bottom: 16px; }
@@ -217,7 +223,7 @@ dt { color: var(--muted); }
 .syswin .chip { border-color: var(--blue); color: var(--blue); }
 .syswin .missions li.ok .tick { background: var(--blue); border-color: var(--blue); color: var(--on-brand); box-shadow: 0 0 10px rgba(190, 150, 255, 0.7); }
 .syswin .reward b { color: var(--gold); font-size: 13.5px; }
-.ach { margin-bottom: 16px; }
+.ach { margin: 16px 0; }
 .badges { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
 @media (min-width: 1100px) { .badges { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .badge { --rc: #C9A8FF; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 3px; padding: 12px 10px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--border); opacity: 0.75; }
@@ -253,7 +259,11 @@ body, .gcard, .card, .tile, nav, .syswin, .hunter, .sysbar { text-shadow: 0 1px 
 .stat .label { font-size: 13px; color: var(--ink-2); } .stat .value { font-size: 30px; font-weight: 750; line-height: 1.15; } .stat .foot { font-size: 12.5px; color: var(--muted); }
 .spark { display: block; width: 100%; height: 42px; margin-top: 6px; }
 .grow3 { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); margin-bottom: 16px; }
-@media (min-width: 1100px) { .grow3 { grid-template-columns: 1fr 1fr; } .grow3.b { grid-template-columns: 1.2fr 1fr 1fr; } }
+@media (min-width: 1100px) { .grow3 { grid-template-columns: 1fr 1fr; } .grow3.b { grid-template-columns: 260px 1fr 1fr; align-items: stretch; }
+  .grow3.b > .gcard { height: 260px; display: flex; flex-direction: column; } .grow3.b > .gcard > h2 { flex: none; }
+  .grow3.b .bars { flex: 1; min-height: 0; max-height: 190px; } .grow3.b > .gcard > div:has(.bars) { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .grow3.b .month { flex: 1; align-content: center; gap: 8px 12px; margin-top: 0; } .grow3.b .month b { font-size: 20px; } .grow3.b .month small { font-size: 11.5px; line-height: 1.25; } .grow3.b .month .gicon { width: 18px; height: 18px; }
+  .grow3.b > .conv-card { aspect-ratio: auto; } }
 .card-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; } .card-h h2 { margin: 0; }
 .link { color: var(--blue); font-size: 13px; text-decoration: none; white-space: nowrap; }
 .conv { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; } .ring { width: 130px; height: 130px; flex: none; } .conv-side { flex: 1; min-width: 150px; }
@@ -290,6 +300,7 @@ body, .gcard, .card, .tile, nav, .syswin, .hunter, .sysbar { text-shadow: 0 1px 
 .missions small { color: var(--muted); }
 .reward { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: linear-gradient(90deg, rgba(160, 120, 255, 0.18), rgba(242, 196, 107, 0.12)); } .reward span { color: var(--ink-2); font-size: 13px; } .reward b { color: var(--gold); font-size: 18px; }
 .month { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-top: 6px; } .month > div { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; } .month b { font-size: 24px; } .month small { color: var(--muted); }
+.act-card { margin-top: 16px; }
 .feed { list-style: none; padding: 0; margin: 0; } .feed li { display: flex; gap: 10px; align-items: baseline; padding: 6px 0; font-size: 13px; cursor: pointer; } .feed small { color: var(--muted); width: 74px; flex: none; }
 .dotg { width: 8px; height: 8px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 8px rgba(242, 196, 107, 0.7); flex: none; align-self: center; }
 .exp { margin-bottom: 16px; } .exp summary { cursor: pointer; color: var(--gold); font-weight: 650; }
@@ -305,6 +316,28 @@ table.saas tbody tr { cursor: pointer; } table.saas tbody tr:hover td { backgrou
 table.saas td { vertical-align: top; } table.saas .nm { font-weight: 650; } table.saas .sub { font-size: 12px; color: var(--muted); }
 .tfoot { margin-top: 10px; font-size: 12.5px; color: var(--muted); }
 @media (max-width: 560px) { .banner-art { height: 200px; } .banner::after { background: linear-gradient(180deg, rgba(8, 3, 16, 0.2) 0%, rgba(8, 3, 16, 0.85) 46%, rgba(8, 3, 16, 0.95) 100%); } .license { flex-direction: column; align-items: flex-start; padding-top: 176px; } .banner h1 { font-size: 24px; } .banner-rd { position: relative; top: auto; right: auto; z-index: 1; display: inline-block; margin: 0 0 0 24px; } .banner { padding-bottom: 14px; } }
+/* editing */
+.edit { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border); }
+.ebox { border: 1px solid var(--border); border-radius: 12px; padding: 8px 12px; margin-top: 10px; background: rgba(255, 255, 255, 0.02); }
+.ebox summary { cursor: pointer; font-family: var(--display); font-weight: 700; letter-spacing: 0.04em; color: var(--blue); }
+.erow { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: flex-end; margin-top: 10px; }
+.elbl { display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; color: var(--muted); flex: 1 1 130px; min-width: 0; }
+.ein { font: inherit; font-size: 13.5px; color: var(--ink); background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; width: 100%; color-scheme: dark; }
+textarea.ein { resize: vertical; }
+.ein:focus { outline: 2px solid rgba(190, 150, 255, 0.6); outline-offset: 1px; }
+.picker { display: flex; flex-direction: column; gap: 6px; }
+.echk { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.ebtn { font: inherit; font-family: var(--display); font-weight: 700; font-size: 13px; letter-spacing: 0.03em; color: var(--ink); background: var(--surface-2); border: 1px solid #4A3280; border-radius: 999px; padding: 7px 14px; cursor: pointer; white-space: nowrap; }
+.ebtn.go { color: #fff; background: var(--active); border-color: transparent; box-shadow: 0 0 12px rgba(150, 100, 255, 0.35); }
+.ebtn.ghost { background: transparent; } .ebtn.warn { color: #FFD3DC; border-color: rgba(240, 100, 90, 0.6); }
+.ebtn:hover { filter: brightness(1.15); }
+.editbar { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 39; display: flex; align-items: center; gap: 10px; width: min(760px, calc(100% - 24px)); padding: 10px 14px; border-radius: 14px; background: rgba(20, 8, 40, 0.92); backdrop-filter: var(--haze); -webkit-backdrop-filter: var(--haze); box-shadow: 0 0 0 1px rgba(242, 196, 107, 0.6), 0 10px 30px rgba(0, 0, 0, 0.6); font-size: 13.5px; }
+.editbar .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.newlead { float: right; margin-top: 2px; }
+.conv-card { align-self: start; aspect-ratio: 1 / 1; display: flex; flex-direction: column; } .conv-card h2 { font-size: 13px; margin-bottom: 4px; } .quest-row { margin: 16px 0; }
+.conv-sq { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 0; } .conv-sq .ring { width: 116px; height: 116px; }
+.conv-mini { width: 100%; max-width: 210px; } .minibars { width: 100%; height: auto; display: block; }
+@media (max-width: 1099px) { .conv-card { aspect-ratio: auto; } }
 [hidden] { display: none !important; }
 ${BG ? 'html, body { background: linear-gradient(180deg, rgba(18, 3, 36, 0.48), rgba(4, 0, 10, 0.68)), radial-gradient(ellipse at 50% 40%, transparent 28%, rgba(1, 0, 4, 0.78) 100%), url("' + BG + '") center 34% / cover no-repeat fixed, #08030F; }' : ''}
 @media (max-width: 820px) {
@@ -338,9 +371,23 @@ ${BG ? 'html, body { background: linear-gradient(180deg, rgba(18, 3, 36, 0.48), 
     <section id="p-cold" hidden></section>
   </main>
 </div>
+<div id="editbar" class="editbar" hidden></div>
 <div id="drawer-root"></div>
 <script>
-const DATA = ${json};
+const ORIGINAL = ${json};
+const SRC_NAME = ${JSON.stringify(path.basename(SRC))};
+const PRACTICE_FILE = ${PRACTICE};
+const LW = (() => {
+${LW_SRC}
+return { workbookFiles, zipFiles, LAYOUT, AUTO, HOT_NEXT, COLD_NEXT, NEXT_ACTIONS };
+})();
+// ---- edits made on this page are kept in this browser until you save them to Excel ----
+const STORE_KEY = 'lead-edits:' + ${JSON.stringify(SIG)};
+let STORE = null;
+try { STORE = JSON.parse(localStorage.getItem(STORE_KEY) || 'null'); } catch (e) { STORE = null; }
+const RAW = STORE && STORE.data ? STORE.data : JSON.parse(JSON.stringify(ORIGINAL));
+const DATA = JSON.parse(JSON.stringify(RAW));
+DATA.leads.forEach((l, i) => { l._i = i; }); DATA.cases.forEach((c, i) => { c._i = i; }); DATA.payments.forEach((p, i) => { p._i = i; });
 const AVATAR = ${JSON.stringify(AVATAR)};
 const HOT = [['h01_phone_date','Phone number received'],['h02_form_sent_date','Google Form sent'],['h03_call_date','First call stage'],['h04_docs_date','Docs collection stage'],['h05_checking_date','Bank Checking stage'],['h06_proposal_date','Proposal stage'],['h07_appointment_date','Appointment stage'],['h08_followup_date','Follow up & closing']];
 const PRODUCTS = ['BCS', 'BCS settlement', 'CCS', 'Goal Loan', 'Home Fin', 'SME Loan', 'Fin Account', 'Card Master', 'Biz Assist', 'Financial Workshop'];
@@ -393,7 +440,7 @@ for (const c of DATA.cases) {
   c.lead = byId.get(c.lead_id);
   c.isInstallment = String(c.installment || '').trim().toLowerCase() === 'yes';
   // installment cases close only when every payment is paid; the others when the fee is collected
-  c.plan = DATA.payments.filter(p => p.case_id === c.case_id).sort((a, b) => a.due_date.localeCompare(b.due_date));
+  c.plan = DATA.payments.filter(p => c.case_id && p.case_id === c.case_id).sort((a, b) => a.due_date.localeCompare(b.due_date));
   c.total = c.plan.reduce((s, p) => s + Number(p.amount || 0), 0);
   c.paid = c.plan.filter(p => p.paid_date).reduce((s, p) => s + Number(p.amount || 0), 0);
   c.next = c.plan.find(p => !p.paid_date) || null;
@@ -620,6 +667,15 @@ function achievements() {
   ];
 }
 const RARITY = { common: '#C9A8FF', rare: '#B794FF', epic: '#F2C46B' };
+// five tiny monthly bars with month labels, for the compact conversion card
+function miniBars(groups) {
+  const w = 200, hh = 44, max = Math.max(1, ...groups.map(g => g.values[0])), bw = w / groups.length;
+  return sv('svg', { viewBox: '0 0 ' + w + ' ' + (hh + 26), class: 'minibars' },
+    groups.map((g, i) => { const v = g.values[0], bh = Math.max(2, v / max * hh), x = i * bw + bw * 0.28;
+      return [sv('rect', { x: x.toFixed(1), y: (hh - bh + 10).toFixed(1), width: (bw * 0.44).toFixed(1), height: bh.toFixed(1), rx: 3, fill: v ? '#F2C46B' : 'rgba(255,255,255,0.12)' }),
+        v ? sv('text', { x: (x + bw * 0.22).toFixed(1), y: (hh - bh + 6).toFixed(1), 'text-anchor': 'middle', class: 'bar-v' }, v) : null,
+        sv('text', { x: (x + bw * 0.22).toFixed(1), y: hh + 24, 'text-anchor': 'middle', class: 'bar-l' }, g.label)]; }));
+}
 function ring(pct, label, sub) {
   const R = 52, C = 2 * Math.PI * R, id = 'g' + (++gradId);
   return sv('svg', { viewBox: '0 0 140 140', class: 'ring' },
@@ -739,36 +795,16 @@ function overview() {
           h('b', { class: 'num' }, n), h('small', { class: 'num' }, Math.round(n / Math.max(1, activeHot.length) * 100) + '%'),
           h('span', { class: 'chev-ic' }, icon(STAGE_ICONS[i], '#fff')));
       }))),
-    h('div', { class: 'grow3' },
-      h('div', { class: 'gcard' }, h('h2', null, 'Lead conversion rate'),
-        h('div', { class: 'conv' }, ring(closeRate, closeRate + '%', won.length + ' / ' + hot.length + ' HOT'),
-          h('div', { class: 'conv-side' }, h('div', { class: 'muted small' }, 'Customers closed per month'), barChart(monthBars, ['#F2C46B'])))),
-      sysWin('QUEST INFO',
-        h('div', { class: 'q-h' }, h('span', null, '[Daily Quest]'), h('span', { class: 'chip' }, done + ' / ' + missions.length)),
-        h('ul', { class: 'missions' }, missions.map(([t, ok, note]) => h('li', { class: ok ? 'ok' : '' }, h('span', { class: 'tick' }, ok ? '✓' : ''), h('span', { class: 'grow' }, t), h('small', null, note)))),
-        h('div', { class: 'q-h' }, h('span', null, '[Weekly Quest]'), h('span', { class: 'chip' }, weekly3.filter(q => q[1] >= q[2]).length + ' / ' + weekly3.length)),
-        h('ul', { class: 'missions' }, weekly3.map(([t, n, goal]) => h('li', { class: n >= goal ? 'ok' : '' }, h('span', { class: 'tick' }, n >= goal ? '✓' : ''), h('span', { class: 'grow' }, t), h('small', { class: 'num' }, Math.min(n, goal) + ' / ' + goal)))),
-        h('div', { class: 'reward' }, h('span', null, 'Rewards'), h('b', null, '+100 EXP daily · +300 EXP weekly')))),
-    h('div', { class: 'gcard ach' }, h('div', { class: 'card-h' }, h('h2', null, 'Achievements'), h('span', { class: 'muted small' }, ach.filter(a => a[2] >= a[3]).length + ' / ' + ach.length + ' unlocked')),
-      h('div', { class: 'badges' }, ach.map(([name, desc, n, goal, rar, ic]) => {
-        const ok = n >= goal, col = RARITY[rar];
-        return h('div', { class: 'badge' + (ok ? ' ok' : ''), style: '--rc:' + col, title: desc },
-          h('div', { class: 'hex' }, icon(ic, ok ? col : '#6E5A88')),
-          h('b', null, name), h('small', null, desc),
-          h('div', { class: 'bprog' }, h('i', { style: 'width:' + Math.round(n / goal * 100) + '%' })),
-          h('span', { class: 'rar' }, ok ? rar.toUpperCase() : n + ' / ' + goal));
-      }))),
     h('div', { class: 'grow3 b' },
+      h('div', { class: 'gcard conv-card' }, h('h2', null, 'Lead conversion rate'),
+        h('div', { class: 'conv-sq' }, ring(closeRate, closeRate + '%', won.length + ' / ' + hot.length + ' HOT'),
+          h('div', { class: 'conv-mini', title: 'Customers closed per month' }, miniBars(monthBars)))),
       h('div', { class: 'gcard' }, h('h2', null, 'Lead source performance'), barChart(srcGroups, ['#9C7BFF', '#F2C46B'], ['Total leads', 'Closed'])),
       h('div', { class: 'gcard' }, h('h2', null, 'This month'),
         h('div', { class: 'month' },
           [['people', newThisMonth.length, 'New leads'], ['check', wonThisMonth.length, 'Customers closed'], ['target', productsThisMonth, 'Products closed'], ['bolt', avgClose == null ? '—' : avgClose + 'd', 'Avg. days to close']]
-            .map(([ic, v, t]) => h('div', null, h('span', { class: 'gi gold' }, icon(ic, '#F2C46B')), h('b', { class: 'num' }, v), h('small', null, t))))),
-      h('div', { class: 'gcard' }, h('h2', null, h('span', { class: 'gi gold' }, icon('bolt', '#F2C46B')), ' Recent activity'),
-        h('ul', { class: 'feed' }, activity().map(([d, l, what]) => h('li', { onclick: () => l && openLead(l) }, h('span', { class: 'dotg' }), h('small', null, ago(d)), h('span', { class: 'grow' }, what + (l ? ' · ' + l.name : ''))))))),
-    h('details', { class: 'gcard exp' }, h('summary', null, 'How EXP works'),
-      h('p', { class: 'muted small' }, 'EXP is counted from your workbook, so it always matches what was done. Ranks: E 0 · D 1,000 · C 3,000 · B 6,000 · A 10,000 · S 15,000 EXP.'),
-      h('ul', { class: 'small' }, EXP_RULES.map(([t, n]) => h('li', null, t + ': +' + n + ' EXP')))),
+            .map(([ic, v, t]) => h('div', null, h('span', { class: 'gi gold' }, icon(ic, '#F2C46B')), h('b', { class: 'num' }, v), h('small', null, t)))))),
+
     h('h2', { class: 'section-h' }, 'More details'),
     h('div', { class: 'grid' },
       h('div', { class: 'card' }, h('h2', null, 'HOT conversion funnel'), h('p', { class: 'muted small' }, 'How many leads reached each step; the % is how many moved on from the step before.'), funnel(rows)),
@@ -788,6 +824,25 @@ function overview() {
             h('td', { class: 'r num' }, ls.length), h('td', { class: 'r num' }, ls.filter(l => l.active).length), h('td', { class: 'r num' }, w.length),
             h('td', { class: 'r num' }, w.reduce((s, l) => s + l.cases.length, 0)), h('td', { class: 'r num' }, Math.round(w.length / Math.max(1, ls.length) * 100) + '%'));
         }))))),
+    h('div', { class: 'quest-row' },
+      sysWin('QUEST INFO',
+        h('div', { class: 'q-h' }, h('span', null, '[Daily Quest]'), h('span', { class: 'chip' }, done + ' / ' + missions.length)),
+        h('ul', { class: 'missions' }, missions.map(([t, ok, note]) => h('li', { class: ok ? 'ok' : '' }, h('span', { class: 'tick' }, ok ? '✓' : ''), h('span', { class: 'grow' }, t), h('small', null, note)))),
+        h('div', { class: 'q-h' }, h('span', null, '[Weekly Quest]'), h('span', { class: 'chip' }, weekly3.filter(q => q[1] >= q[2]).length + ' / ' + weekly3.length)),
+        h('ul', { class: 'missions' }, weekly3.map(([t, n, goal]) => h('li', { class: n >= goal ? 'ok' : '' }, h('span', { class: 'tick' }, n >= goal ? '✓' : ''), h('span', { class: 'grow' }, t), h('small', { class: 'num' }, Math.min(n, goal) + ' / ' + goal)))),
+        h('div', { class: 'reward' }, h('span', null, 'Rewards'), h('b', null, '+100 EXP daily · +300 EXP weekly')))),
+    h('div', { class: 'gcard ach' }, h('div', { class: 'card-h' }, h('h2', null, 'Achievements'), h('span', { class: 'muted small' }, ach.filter(a => a[2] >= a[3]).length + ' / ' + ach.length + ' unlocked')),
+      h('div', { class: 'badges' }, ach.map(([name, desc, n, goal, rar, ic]) => {
+        const ok = n >= goal, col = RARITY[rar];
+        return h('div', { class: 'badge' + (ok ? ' ok' : ''), style: '--rc:' + col, title: desc },
+          h('div', { class: 'hex' }, icon(ic, ok ? col : '#6E5A88')),
+          h('b', null, name), h('small', null, desc),
+          h('div', { class: 'bprog' }, h('i', { style: 'width:' + Math.round(n / goal * 100) + '%' })),
+          h('span', { class: 'rar' }, ok ? rar.toUpperCase() : n + ' / ' + goal));
+      }))),
+    h('details', { class: 'gcard exp' }, h('summary', null, 'How EXP works'),
+      h('p', { class: 'muted small' }, 'EXP is counted from your workbook, so it always matches what was done. Ranks: E 0 · D 1,000 · C 3,000 · B 6,000 · A 10,000 · S 15,000 EXP.'),
+      h('ul', { class: 'small' }, EXP_RULES.map(([t, n]) => h('li', null, t + ': +' + n + ' EXP')))),
   ];
 }
 // ---- Leads: a clean, searchable, sortable table ----
@@ -813,7 +868,7 @@ function leadsPage() {
     label, h('span', { class: 'arrow' }, tbl.sort === key ? (tbl.dir > 0 ? ' ▲' : ' ▼') : ''));
   const search = h('input', { type: 'search', id: 'lead-q', placeholder: 'Search name, ID, phone, problem…', value: tbl.q, oninput: e => { tbl.q = e.target.value; render(); const i = document.getElementById('lead-q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); } });
   const uniq = f => [...new Set(leads.map(f).filter(Boolean))].sort();
-  return [pageHead('Leads', 'Every lead and customer in one table. Click a row for details.'),
+  return [h('div', { class: 'newlead' }, btn('+ New lead', openNewLead, 'go')), pageHead('Leads', 'Every lead and customer in one table. Click a row for details.'),
     h('div', { class: 'gcard' },
       h('div', { class: 'tbar' }, search, opt('status', ['Active', 'Won', 'Lost']), opt('category', ['HOT', 'COLD']), opt('source', uniq(l => l.platform)), opt('agent', uniq(agentOf)),
         h('button', { class: 'pill', onclick: () => { Object.assign(tbl, { q: '', status: 'All', category: 'All', source: 'All', agent: 'All' }); render(); } }, 'Clear')),
@@ -828,7 +883,9 @@ function leadsPage() {
           h('td', { class: 'small num' }, fmt(l.first_contact_date)),
           h('td', { class: 'small' }, l.status === 'Won' ? [h('div', null, l.last_action || 'Last action'), h('div', { class: 'sub' }, ago(l.lastActionDate))] : l.next_action ? [h('div', null, l.next_action), h('div', { class: 'sub' }, whenText(l.next_action_date))] : h('span', { class: 'muted' }, '—')),
           h('td', { class: 'r num small' + (l.active && l.idle >= STUCK ? ' od' : '') }, idleOf(l) + 'd')))))),
-      h('div', { class: 'tfoot' }, 'Showing ' + rows.length + ' of ' + leads.length + (rows.length !== leads.length ? ' (filtered)' : '')))];
+      h('div', { class: 'tfoot' }, 'Showing ' + rows.length + ' of ' + leads.length + (rows.length !== leads.length ? ' (filtered)' : ''))),
+    h('div', { class: 'gcard act-card' }, h('h2', null, h('span', { class: 'gi gold' }, icon('bolt', '#F2C46B')), ' Recent activity'),
+      h('ul', { class: 'feed' }, activity(12).map(([d, l, what]) => h('li', { onclick: () => l && openLead(l) }, h('span', { class: 'dotg' }), h('small', null, ago(d)), h('span', { class: 'grow' }, what + (l ? ' · ' + l.name : ''))))))];
 }
 let boardFilter = 'Active';
 function board() {
@@ -986,10 +1043,197 @@ function openLead(l) {
         h('h3', { style: 'margin-top:16px' }, 'After-sales'),
         h('ul', { class: 'tl' },
           h('li', { class: l.coi_date ? 'done' : '' }, h('span', { class: 'dot' }), 'Converted to COI', h('span', { class: 'd' }, l.coi_date ? fmt(l.coi_date) : '')),
-          h('li', { class: l.telegram_promoted_date ? 'done' : '' }, h('span', { class: 'dot' }), 'Telegram group promoted', h('span', { class: 'd' }, l.telegram_promoted_date ? fmt(l.telegram_promoted_date) : '')))] : null)
+          h('li', { class: l.telegram_promoted_date ? 'done' : '' }, h('span', { class: 'dot' }), 'Telegram group promoted', h('span', { class: 'd' }, l.telegram_promoted_date ? fmt(l.telegram_promoted_date) : '')))] : null,
+      editPanel(l))
   );
 }
 addEventListener('keydown', e => { if (e.key === 'Escape') document.getElementById('drawer-root').replaceChildren(); });
+
+// ---- editing on the page (kept in this browser until "Save to Excel") ----
+const pad2 = n => String(n).padStart(2, '0');
+const todayISO = () => { const d = new Date(); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }; // only a default for date boxes you fill in
+function commit(what, reopen) {
+  const changes = ((STORE && !STORE.saved && STORE.changes) || []).concat([what]);
+  STORE = { data: RAW, changes, saved: false };
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(STORE)); }
+  catch (e) { alert('This browser would not keep the change (' + e.message + '). Nothing was changed.'); return; }
+  try { if (reopen != null) sessionStorage.setItem('lead-reopen', String(reopen)); } catch (e) {}
+  location.reload();
+}
+const nextId = (rows, key, prefix) => {
+  const max = rows.reduce((m, r) => { const x = new RegExp('^' + prefix + '-(\\d+)$').exec(String(r[key] || '')); return x ? Math.max(m, Number(x[1])) : m; }, 0);
+  return prefix + '-' + String(max + 1).padStart(4, '0');
+};
+const ensureCaseId = i => { if (!RAW.cases[i].case_id) RAW.cases[i].case_id = nextId(RAW.cases, 'case_id', 'C'); return RAW.cases[i].case_id; };
+// small form helpers
+const inp = (type, value, attrs) => h('input', Object.assign({ type, value: value == null ? '' : value, class: 'ein' }, attrs || {}));
+const sel = (options, value) => { const s = h('select', { class: 'ein' }, options.map(o => { const op = h('option', { value: o }, o); if (o === value) op.selected = true; return op; })); return s; };
+const row = (...kids) => h('div', { class: 'erow' }, kids);
+const btn = (label, fn, cls) => h('button', { class: 'ebtn' + (cls ? ' ' + cls : ''), onclick: fn }, label);
+const lbl = (text, el) => h('label', { class: 'elbl' }, h('span', null, text), el);
+const box = (title, open, ...kids) => { const d = h('details', { class: 'ebox' }, h('summary', null, title), kids); if (open) d.open = true; return d; };
+
+const OTHER = 'Other…';
+function suggestNext(l) { return l.category === 'COLD' ? LW.COLD_NEXT[Math.min(l.coldStep, LW.COLD_NEXT.length - 1)] : LW.HOT_NEXT[Math.min(Math.max(l.stage, 1) - 1, LW.HOT_NEXT.length - 1)]; }
+function nextPicker(current, suggestion) {
+  const choices = LW.NEXT_ACTIONS.slice();
+  const known = current && choices.includes(current);
+  const s = sel([...choices, OTHER], known ? current : current ? OTHER : suggestion);
+  const own = inp('text', known ? '' : (current || ''), { placeholder: 'Type the next action' });
+  const sync = () => { own.hidden = s.value !== OTHER; };
+  s.addEventListener('change', () => { sync(); if (s.value === OTHER) own.focus(); });
+  sync();
+  return { el: h('div', { class: 'picker' }, s, own), value: () => (s.value === OTHER ? own.value.trim() : s.value) };
+}
+function editPanel(l) {
+  const L = RAW.leads[l._i];
+  const parts = [];
+  // 1) move forward
+  if (l.status === 'Active' && l.category === 'HOT') {
+    const nxt = HOT[l.stage];
+    const d1 = inp('date', todayISO());
+    if (nxt) parts.push(row(lbl('Step done on', d1), btn('✓ ' + nxt[1], () => { L[nxt[0]] = d1.value; commit(l.name + ': ' + nxt[1], l._i); }, 'go')));
+    if (l.stage) parts.push(row(h('span', { class: 'muted small' }, 'Now at: ' + HOT[l.stage - 1][1]), btn('Undo last step', () => { delete L[HOT[l.stage - 1][0]]; commit(l.name + ': undo ' + HOT[l.stage - 1][1], l._i); }, 'ghost')));
+  }
+  if (l.status === 'Active' && l.category === 'COLD') {
+    const nxt = COLD[l.coldStep];
+    const d1 = inp('date', todayISO());
+    if (nxt && nxt[0] !== 'c3_upgraded_hot_date') parts.push(row(lbl('Done on', d1), btn('✓ ' + nxt[1], () => { L[nxt[0]] = d1.value; commit(l.name + ': ' + nxt[1], l._i); }, 'go')));
+    const d2 = inp('date', todayISO());
+    parts.push(row(lbl('Gave contact details on', d2), btn('⬆ Upgrade to HOT', () => { L.c3_upgraded_hot_date = d2.value; L.category = 'HOT'; L.h01_phone_date = L.h01_phone_date || d2.value; commit(l.name + ': upgraded to HOT', l._i); }, 'go')));
+  }
+  // 2) next action (open leads) or last action (closed customers)
+  if (l.status === 'Won') {
+    const t = inp('text', L.last_action, { placeholder: 'What you did' }), d = inp('date', todayISO());
+    parts.push(row(lbl('Last action', t), lbl('Date', d), btn('Save', () => { L.last_action = t.value.trim(); L.last_action_date = d.value; commit(l.name + ': last action', l._i); })));
+  } else if (l.status === 'Active') {
+    const t = nextPicker(L.next_action, suggestNext(l)), d = inp('date', L.next_action_date || todayISO());
+    parts.push(row(lbl('Next action', t.el), lbl('Date', d), btn('Save', () => { const v = t.value(); if (v) L.next_action = v; else delete L.next_action; L.next_action_date = d.value; commit(l.name + ': next action', l._i); })));
+  }
+  const blocks = [box('Update progress', true, parts.length ? parts : h('p', { class: 'muted small' }, 'Nothing to move forward here.'))];
+  // 3) closing: add a product (marks the lead Won)
+  if (l.category === 'HOT' && l.status !== 'Lost') {
+    const p = sel(PRODUCTS, PRODUCTS[0]), dc = inp('date', todayISO()), dp = inp('date', ''), ins = h('input', { type: 'checkbox' });
+    const note = h('span', { class: 'muted small' }, 'Installment is only for ' + INSTALLMENT_PRODUCTS.join(', '));
+    blocks.push(box(l.status === 'Won' ? 'Add another product' : 'Closed! Add the product', l.status === 'Active' && l.stage >= 7,
+      row(lbl('Product', p), lbl('Closed on', dc), lbl('Processing from', dp)),
+      row(h('label', { class: 'echk' }, ins, ' Fee paid by installment'), note),
+      row(btn('Add product' + (l.status === 'Won' ? '' : ' and mark Won'), () => {
+        if (ins.checked && !INSTALLMENT_PRODUCTS.includes(p.value)) { alert('Installment is only for ' + INSTALLMENT_PRODUCTS.join(', ') + '.'); return; }
+        const c = { case_id: nextId(RAW.cases, 'case_id', 'C'), lead_id: L.lead_id, product: p.value, closed_date: dc.value };
+        if (dp.value) c.processing_date = dp.value; if (ins.checked) c.installment = 'Yes';
+        RAW.cases.push(c);
+        if (L.status !== 'Won') { L.status = 'Won'; if (L.next_action) { L.last_action = L.next_action; L.last_action_date = L.next_action_date; delete L.next_action; delete L.next_action_date; } if (!L.h08_followup_date) L.h08_followup_date = dc.value; }
+        commit(l.name + ': closed ' + p.value, l._i);
+      }, 'go'))));
+  }
+  // 4) each product: processing, fee, installments
+  l.cases.forEach(c => {
+    const C = RAW.cases[c._i], items = [];
+    if (!c.processing_date) { const d = inp('date', todayISO()); items.push(row(lbl('Processing from', d), btn('Start processing', () => { C.processing_date = d.value; commit(l.name + ': ' + c.product + ' processing', l._i); }))); }
+    if (!c.isInstallment && !c.fee_collected_date) { const d = inp('date', todayISO()); items.push(row(lbl('Fee collected on', d), btn('✓ Fee collected (close case)', () => { C.fee_collected_date = d.value; commit(l.name + ': ' + c.product + ' fee collected', l._i); }, 'go'))); }
+    if (c.isInstallment) {
+      c.plan.filter(pm => !pm.paid_date).forEach(pm => { const d = inp('date', todayISO()); items.push(row(h('span', { class: 'small' }, 'Due ' + fmt(pm.due_date) + ' · ' + RM(pm.amount)), lbl('Paid on', d), btn('✓ Paid', () => { RAW.payments[pm._i].paid_date = d.value; commit(l.name + ': ' + c.product + ' installment paid', l._i); }, 'go'))); });
+      const dd = inp('date', ''), am = inp('number', '', { min: 0, step: 50, placeholder: 'RM' });
+      items.push(row(lbl('New installment due', dd), lbl('Amount (RM)', am), btn('Add installment', () => {
+        if (!dd.value || !(Number(am.value) > 0)) { alert('Fill in the due date and an amount.'); return; }
+        RAW.payments.push({ case_id: ensureCaseId(c._i), due_date: dd.value, amount: Number(am.value) });
+        commit(l.name + ': ' + c.product + ' installment added', l._i);
+      })));
+    }
+    if (items.length) blocks.push(box(c.product + ' · ' + (c.state === 'Closed' ? 'closed' : 'processing'), true, items));
+  });
+  // 5) after-sales
+  if (l.status === 'Won') {
+    const items = [];
+    if (!l.coi_date) { const d = inp('date', todayISO()); items.push(row(lbl('On', d), btn('✓ Converted to COI', () => { L.coi_date = d.value; commit(l.name + ': COI', l._i); }, 'go'))); }
+    if (!l.telegram_promoted_date) { const d = inp('date', todayISO()); items.push(row(lbl('On', d), btn('✓ Telegram group promoted', () => { L.telegram_promoted_date = d.value; commit(l.name + ': Telegram promoted', l._i); }, 'go'))); }
+    if (items.length) blocks.push(box('After-sales', false, items));
+  }
+  // 6) lost
+  if (l.status === 'Active') {
+    const r = inp('text', '', { placeholder: 'Why (e.g. no reply)' });
+    blocks.push(box('Mark as lost', false, row(lbl('Reason', r), btn('Mark lost', () => { L.status = 'Lost'; L.lost_reason = r.value.trim(); commit(l.name + ': lost', l._i); }, 'warn'))));
+  } else if (l.status === 'Lost') {
+    blocks.push(box('Reopen', false, row(btn('Reopen this lead', () => { L.status = 'Active'; commit(l.name + ': reopened', l._i); }))));
+  }
+  // 7) details
+  const f = { name: inp('text', L.name), phone: inp('text', L.phone), platform: inp('text', L.platform), agent: inp('text', L.agent || ''), problem: inp('text', L.problem), notes: h('textarea', { class: 'ein', rows: 2 }, L.notes || '') };
+  blocks.push(box('Edit details', false,
+    row(lbl('Name', f.name), lbl('Phone', f.phone)), row(lbl('Source', f.platform), lbl('Agent (' + OWNER + ' = own case)', f.agent)),
+    row(lbl('Problem', f.problem)), row(lbl('Notes', f.notes)),
+    row(btn('Save details', () => { for (const k of Object.keys(f)) { const v = f[k].value.trim(); if (v) L[k] = v; else delete L[k]; } commit(l.name + ': details', l._i); }))));
+  return h('div', { class: 'edit' }, h('h3', null, 'Update'), blocks);
+}
+
+function openNewLead() {
+  const root = document.getElementById('drawer-root');
+  const close = () => root.replaceChildren();
+  const f = { name: inp('text', ''), category: sel(['HOT', 'COLD'], 'HOT'), platform: inp('text', ''), phone: inp('text', ''), problem: inp('text', ''), agent: inp('text', OWNER), first: inp('date', todayISO()), next: nextPicker('', LW.HOT_NEXT[0]), nextd: inp('date', todayISO()) };
+  f.category.addEventListener('change', () => { const s = f.next.el.querySelector('select'); if (s.value === LW.HOT_NEXT[0] || s.value === LW.COLD_NEXT[0]) s.value = f.category.value === 'COLD' ? LW.COLD_NEXT[0] : LW.HOT_NEXT[0]; });
+  root.replaceChildren(h('div', { class: 'back', onclick: close }), h('aside', { class: 'drawer' },
+    h('button', { class: 'x', onclick: close, 'aria-label': 'Close' }, '×'), h('h2', null, 'New lead'),
+    h('div', { class: 'edit' },
+      row(lbl('Name', f.name), lbl('HOT / COLD', f.category)), row(lbl('Source', f.platform), lbl('Phone (HOT)', f.phone)),
+      row(lbl('Problem', f.problem)), row(lbl('Agent (' + OWNER + ' = own case)', f.agent), lbl('First contact', f.first)),
+      row(lbl('Next action', f.next.el), lbl('Date', f.nextd)),
+      row(btn('Add lead', () => {
+        if (!f.name.value.trim()) { alert('Please fill in a name.'); return; }
+        const L = { lead_id: nextId(RAW.leads, 'lead_id', 'L'), name: f.name.value.trim(), platform: f.platform.value.trim(), first_contact_date: f.first.value, category: f.category.value, status: 'Active', agent: f.agent.value.trim() || OWNER, consultant: OWNER };
+        if (f.phone.value.trim()) L.phone = f.phone.value.trim(); if (f.problem.value.trim()) L.problem = f.problem.value.trim();
+        if (f.category.value === 'HOT') L.h01_phone_date = f.first.value;
+        if (f.next.value()) { L.next_action = f.next.value(); L.next_action_date = f.nextd.value; }
+        RAW.leads.push(L);
+        commit('New lead: ' + L.name, RAW.leads.length - 1);
+      }, 'go')))));
+}
+
+// ---- Save to Excel ----
+const deflateRaw = async raw => new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer());
+async function saveToExcel() {
+  const sheets = { Leads: RAW.leads, Cases: RAW.cases, Payments: RAW.payments, Freebies: RAW.freebies };
+  const clean = {}, extra = {};
+  for (const [sheet, rows] of Object.entries(sheets)) {
+    const known = new Set(LW.LAYOUT[sheet].map(c => c[0])), auto = LW.AUTO[sheet] || {};
+    extra[sheet] = [...new Set(rows.flatMap(r => Object.keys(r)))].filter(k => !known.has(k) && !(k in auto));
+    clean[sheet] = rows.map(r => { const o = {}; for (const [k, v] of Object.entries(r)) if (!(k in auto) && v !== null && v !== '') o[k] = v; return o; }).filter(o => Object.keys(o).length);
+  }
+  const files = LW.workbookFiles({ leads: clean.Leads, cases: clean.Cases, payments: clean.Payments, freebies: clean.Freebies, extra,
+    title: PRACTICE_FILE ? 'Lead practice workbook (' + SRC_NAME + ')' : 'Lead workbook (' + SRC_NAME + ')',
+    subtitle: PRACTICE_FILE ? 'Every name, phone number and problem here is invented practice data.' : 'Your own leads. Keep this file on your computer: it holds personal details and is never uploaded to GitHub.' });
+  const blob = new Blob([await LW.zipFiles(files, deflateRaw)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  let how = 'downloaded';
+  if (window.showSaveFilePicker) {
+    try {
+      const fh = await window.showSaveFilePicker({ suggestedName: SRC_NAME, types: [{ description: 'Excel workbook', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } }] });
+      const w = await fh.createWritable(); await w.write(blob); await w.close(); how = 'saved';
+    } catch (e) {
+      if (e.name === 'AbortError') return;
+      alert('Could not write the file (' + e.message + '). If it is open in Excel, close it first. The file will be downloaded instead.');
+      how = 'downloaded';
+    }
+  }
+  if (how === 'downloaded') { const a = h('a', { href: URL.createObjectURL(blob), download: SRC_NAME }); document.body.append(a); a.click(); a.remove(); }
+  STORE = { data: RAW, changes: (STORE && STORE.changes) || [], saved: true, how };
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(STORE)); } catch (e) {}
+  showEditBar();
+}
+function showEditBar() {
+  const bar = document.getElementById('editbar');
+  if (!STORE) { bar.hidden = true; return; }
+  bar.hidden = false;
+  if (STORE.saved) {
+    // saved changes stay in this browser so the page keeps showing them until it is rebuilt from the new Excel
+    if (STORE.dismissed) { bar.hidden = true; return; }
+    bar.replaceChildren(h('span', { class: 'sys-dot' }), h('span', { class: 'grow' }, STORE.how === 'saved' ? 'Saved to Excel. Your changes are in the file now; this page keeps showing them.' : 'Excel downloaded (' + SRC_NAME + '). Move it into the data/leads folder to replace the old one.'),
+      btn('OK', () => { STORE.dismissed = true; try { localStorage.setItem(STORE_KEY, JSON.stringify(STORE)); } catch (e) {} bar.hidden = true; }, 'ghost'));
+    return;
+  }
+  const n = STORE.changes.length;
+  bar.replaceChildren(h('span', { class: 'sys-dot' }), h('span', { class: 'grow', title: STORE.changes.slice(-10).join('\n') }, n + (n === 1 ? ' change' : ' changes') + ' not saved to Excel yet · last: ' + STORE.changes[n - 1]),
+    btn('Save to Excel', saveToExcel, 'go'),
+    btn('Undo all', () => { if (confirm('Undo all ' + n + ' changes made on this page? Your Excel file stays as it is.')) { try { localStorage.removeItem(STORE_KEY); } catch (e) {} location.reload(); } }, 'ghost'));
+}
 
 // ---- router ----
 const PAGES = { overview, leads: leadsPage, board, cases: casesPage, aftersales: afterSalesPage, followup, cold: coldPage };
@@ -1034,6 +1278,8 @@ document.getElementById('c-after').textContent = afterSalesDue.length;
 document.getElementById('c-cold').textContent = cold.length;
 addEventListener('hashchange', () => { render(); scrollTo(0, 0); });
 render();
+showEditBar();
+try { const ri = sessionStorage.getItem('lead-reopen'); sessionStorage.removeItem('lead-reopen'); if (ri != null && DATA.leads[Number(ri)]) openLead(DATA.leads[Number(ri)]); } catch (e) {}
 </script>
 </body>
 </html>
