@@ -11,6 +11,10 @@ dist/
 # Your own leads (real customers' personal details): stay on this computer only
 data/leads/My_*.xlsx
 mockups/my-*.html
+mockups/my-background.*
+mockups/my-avatar.*
+mockups/font-preview-*.html
+mockups/font-compare.html
 ~$*.xlsx
 
 # Local preview settings
