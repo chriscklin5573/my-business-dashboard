@@ -1190,6 +1190,13 @@ function openNewLead() {
 
 // ---- Save to Excel ----
 const deflateRaw = async raw => new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer());
+// remembers which file Save to Excel writes to (IndexedDB can keep a file handle; localStorage cannot)
+const HANDLE_KEY = 'xlsx:' + SRC_NAME;
+function handleDb() { return new Promise((ok, no) => { const r = indexedDB.open('lead-dashboard', 1); r.onupgradeneeded = () => r.result.createObjectStore('files'); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); }); }
+async function handleDo(mode, fn) { try { const db = await handleDb(); return await new Promise(ok => { const q = fn(db.transaction('files', mode).objectStore('files')); q.onsuccess = () => ok(q.result); q.onerror = () => ok(null); }); } catch (e) { return null; } }
+const handleGet = () => handleDo('readonly', st => st.get(HANDLE_KEY));
+const handlePut = fh => handleDo('readwrite', st => st.put(fh, HANDLE_KEY));
+const handleDel = () => handleDo('readwrite', st => st.delete(HANDLE_KEY));
 async function saveToExcel() {
   const sheets = { Leads: RAW.leads, Cases: RAW.cases, Payments: RAW.payments, Freebies: RAW.freebies };
   const clean = {}, extra = {};
@@ -1205,10 +1212,18 @@ async function saveToExcel() {
   let how = 'downloaded';
   if (window.showSaveFilePicker) {
     try {
-      const fh = await window.showSaveFilePicker({ suggestedName: SRC_NAME, types: [{ description: 'Excel workbook', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } }] });
+      // after the first save, write straight back to the same file (its handle is kept in this browser)
+      let fh = await handleGet();
+      if (fh && (await fh.requestPermission({ mode: 'readwrite' })) !== 'granted') fh = null;
+      if (!fh) {
+        if (!confirm('Next, choose where to save.\n\nGo to: Desktop > Business Dashboard > data > leads\nPick ' + SRC_NAME + ' and choose Replace.\n\nAfter this first time, Save to Excel writes to that file directly.')) return;
+        fh = await window.showSaveFilePicker({ id: 'lead-xlsx', suggestedName: SRC_NAME, types: [{ description: 'Excel workbook', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } }] });
+        await handlePut(fh);
+      }
       const w = await fh.createWritable(); await w.write(blob); await w.close(); how = 'saved';
     } catch (e) {
       if (e.name === 'AbortError') return;
+      handleDel();
       alert('Could not write the file (' + e.message + '). If it is open in Excel, close it first. The file will be downloaded instead.');
       how = 'downloaded';
     }
